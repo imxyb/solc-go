@@ -1,10 +1,14 @@
 package solc
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strings"
 	"sync"
 
+	"github.com/fxamacker/cbor"
 	"github.com/hashicorp/go-version"
 	"github.com/imroc/req/v3"
 	"github.com/tidwall/gjson"
@@ -146,6 +150,35 @@ func GetCompiler(ver string) (*Compiler, error) {
 	}
 	compilerCache[ver] = compiler
 	return compiler, nil
+}
+
+// Verify verify bytecode is equal
+// refer to https://docs.soliditylang.org/en/v0.8.17/metadata.html
+func Verify(compiledByteCode, byteCode, byteCodeHash string) (bool, error) {
+	// get hex from bytecodeHash
+	b, err := cbor.Marshal(byteCodeHash, cbor.EncOptions{})
+	if err != nil {
+		return false, err
+	}
+	startStr := hex.EncodeToString(b)
+	// get hex from "solc"
+	b, err = cbor.Marshal("solc", cbor.EncOptions{})
+	if err != nil {
+		return false, err
+	}
+	endStr := hex.EncodeToString(b)
+	reg := fmt.Sprintf(`\w+?(%s\w+)%s\w+?`, startStr, endStr)
+	re := regexp.MustCompile(reg)
+	fn := func(s string) string {
+		rs := re.FindAllStringSubmatch(s, -1)
+		if len(rs) > 0 && len(rs[0]) >= 2 {
+			return strings.Replace(s, rs[0][1], "", -1)
+		}
+		return s
+	}
+	compiledByteCode = fn(compiledByteCode)
+	byteCode = fn(byteCode)
+	return compiledByteCode == byteCode, nil
 }
 
 func init() {
