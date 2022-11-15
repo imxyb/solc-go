@@ -86,6 +86,10 @@ func (c *Compiler) Compile(input *Input) (*Output, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	c.mux.Lock()
+	defer c.mux.Unlock()
+
 	value, err := v8go.NewValue(c.isolate, string(b))
 	if err != nil {
 		return nil, err
