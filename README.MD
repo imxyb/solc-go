@@ -18,12 +18,12 @@ import (
 )
 
 func main() {
-	// get release list
-	releaseVersionList, err := solc.ReleaseVersionList()
+	// get build list
+	buildList, err := solc.GetBuildList()
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(releaseVersionList)
+	fmt.Println(buildList)
 
 	// get 0.6.0 complier
 	compiler, err := solc.GetCompiler("0.8.13")
@@ -76,7 +76,7 @@ contract HelloWorld {
 	if err := json.Unmarshal([]byte(metadata), &m); err != nil {
 		panic(err)
 	}
-	compiledByteCode := output.Contracts["Token.sol"]["HelloWorld"].EVM.DeployedBytecode.Object)
+	compiledByteCode := output.Contracts["Token.sol"]["HelloWorld"].EVM.DeployedBytecode.Object
 
 	// verify code
 	remoteByteCode := "608060..."

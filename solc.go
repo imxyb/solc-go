@@ -16,12 +16,23 @@ import (
 )
 
 var (
-	binList                 string
-	releaseVersionListCache = make(map[string]string)
-	compilerCache           = make(map[string]*Compiler)
-	ver6, _                 = version.NewVersion("0.6.0")
-	ver5, _                 = version.NewVersion("0.5.0")
+	wasmBinList    string
+	binList        string
+	buildListCache []*BuildList
+	compilerCache  = make(map[string]*Compiler)
+	ver6, _        = version.NewVersion("0.6.0")
+	ver5, _        = version.NewVersion("0.5.0")
+	reqC           *req.Client
 )
+
+type BuildList struct {
+	Path        string `json:"path"`
+	Version     string `json:"version"`
+	Build       string `json:"build"`
+	LongVersion string `json:"longVersion"`
+	Keccak256   string `json:"keccak256"`
+	Sha256      string `json:"sha256"`
+}
 
 type Compiler struct {
 	isolate *v8go.Isolate
@@ -113,15 +124,15 @@ func (c *Compiler) Close() {
 	c.isolate.Dispose()
 }
 
-// ReleaseVersionList get release version list
-func ReleaseVersionList() (map[string]string, error) {
-	if len(releaseVersionListCache) == 0 {
-		result := gjson.Get(binList, "releases")
-		if err := json.Unmarshal([]byte(result.String()), &releaseVersionListCache); err != nil {
+// GetBuildList get build list
+func GetBuildList() ([]*BuildList, error) {
+	if len(buildListCache) == 0 {
+		result := gjson.Get(binList, "builds")
+		if err := json.Unmarshal([]byte(result.String()), &buildListCache); err != nil {
 			return nil, err
 		}
 	}
-	return releaseVersionListCache, nil
+	return buildListCache, nil
 }
 
 func GetCompiler(ver string) (*Compiler, error) {
@@ -131,7 +142,7 @@ func GetCompiler(ver string) (*Compiler, error) {
 	}
 
 	var path string
-	result := gjson.Get(binList, "builds")
+	result := gjson.Get(wasmBinList, "builds")
 	for _, item := range result.Array() {
 		if item.Get("version").String() == ver {
 			path = item.Get("path").String()
@@ -139,7 +150,7 @@ func GetCompiler(ver string) (*Compiler, error) {
 		}
 	}
 	u := fmt.Sprintf("https://binaries.soliditylang.org/emscripten-wasm32/%s", path)
-	resp := req.C().Get(u).Do()
+	resp := reqC.Get(u).Do()
 	if resp.Err != nil {
 		return nil, resp.Err
 	}
@@ -186,13 +197,23 @@ func Verify(compiledByteCode, byteCode, byteCodeHash string) (bool, error) {
 }
 
 func init() {
+	reqC = req.C()
 	if err := initSolcBinList(); err != nil {
 		panic(err)
 	}
 }
 
 func initSolcBinList() error {
-	resp := req.C().Get("https://raw.githubusercontent.com/ethereum/solc-bin/gh-pages/emscripten-wasm32/list.json").Do()
+	resp := reqC.Get("https://raw.githubusercontent.com/ethereum/solc-bin/gh-pages/emscripten-wasm32/list.json").Do()
+	if resp.Err != nil {
+		return resp.Err
+	}
+	if resp.IsError() {
+		return fmt.Errorf("get wasm list failed, status code:%d", resp.GetStatusCode())
+	}
+	wasmBinList = resp.String()
+
+	resp = reqC.Get("https://raw.githubusercontent.com/ethereum/solc-bin/gh-pages/bin/list.json").Do()
 	if resp.Err != nil {
 		return resp.Err
 	}
